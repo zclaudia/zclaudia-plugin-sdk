@@ -44,7 +44,8 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "pack:check": "npm pack --dry-run",
-    "prepublishOnly": "pnpm clean && pnpm test && pnpm build"
+    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm pack:check",
+    "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm test && pnpm build"
   },
   "engines": {
     "node": ">=22.19.0"

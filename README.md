@@ -62,3 +62,16 @@ plugin SDK.
 
 The package follows semantic versioning. Additive fields are minor changes. Removing or changing a
 public field, callback, manifest contribution, or adapter method is a major change.
+
+## Releasing
+
+Publishing uses npm Trusted Publishing from `.github/workflows/publish.yml`; the repository does
+not need an `NPM_TOKEN`. To release a version:
+
+1. Update `package.json` and `pnpm-lock.yaml` to the same version and merge the change to `main`.
+2. Create a `v<version>` tag, such as `v0.1.1`, on that commit.
+3. Publish a GitHub Release for the tag.
+
+The release workflow verifies that the tag matches `package.json`, runs all checks, and publishes
+the public package through GitHub OIDC. Re-running a release for an already-published npm version
+will fail because npm package versions are immutable.
