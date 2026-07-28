@@ -1,4 +1,5 @@
 export * from './interactions.js';
+export * from './managed-runtimes.js';
 export * from './manifest.js';
 export * from './providers.js';
 export * from './runtime.js';

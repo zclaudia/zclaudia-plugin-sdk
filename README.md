@@ -49,6 +49,31 @@ export default definePlugin({
 The corresponding `plugin.json` must declare the same runtime type under
 `contributes.agentRuntimes` and request `provider.register`.
 
+## Managed Agent CLI contract
+
+Agent plugins can optionally ship a schema-version-1 `runtime-compatibility.json` with
+`managedInstall` artifact metadata. The public types are exported from
+`@zclaudia/plugin-sdk/managed-runtimes`. During activation, a plugin with `provider.register` can
+request host resolution:
+
+```ts
+const resolution = await context.managedRuntimes?.resolve({
+  runtime: 'example',
+  explicitPath: configuredCliPath,
+  headless: true,
+});
+```
+
+This API is intentionally restricted. The host binds the request to the calling plugin and applies
+its own policy and trust decisions; the plugin cannot pass a download URL, checksum, or approval.
+The adapter receives the final `cliPath` and is not responsible for downloading software.
+
+Managed artifacts support multiple versions and `darwin-arm64`, `darwin-x64`, `linux-x64`,
+`linux-arm64`, and `win32-x64`. Every artifact requires a URL and SHA-256 digest plus a `raw`,
+`zip`, or `tar.gz` format and relative executable path. Authentication probes are declarative and
+run with the user's inherited `HOME`, official auth environment, and OS Keychain access; plugins
+must not copy or translate tokens.
+
 ## Package boundaries
 
 - `@zclaudia/protocol` owns JSON-serializable transport contracts.

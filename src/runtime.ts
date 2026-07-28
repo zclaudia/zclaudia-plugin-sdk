@@ -5,6 +5,7 @@ import type {
   ProviderToolBridgeEntry,
   ProviderToolBridgeRequest,
 } from './providers.js';
+import type { ManagedRuntimesAPI } from './managed-runtimes.js';
 
 export type EventHandler = (data: unknown) => void | Promise<void>;
 
@@ -279,6 +280,7 @@ export interface PluginContext {
   ui?: UIAPI;
   providers?: ProviderAPI;
   agentRuntimes?: AgentRuntimesAPI;
+  managedRuntimes?: ManagedRuntimesAPI;
   mcp?: McpAPI;
   capabilities?: CapabilityNegotiationResult;
   exports<T>(api: T): void;

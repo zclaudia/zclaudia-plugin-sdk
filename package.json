@@ -21,6 +21,10 @@
       "types": "./dist/interactions.d.ts",
       "import": "./dist/interactions.js"
     },
+    "./managed-runtimes": {
+      "types": "./dist/managed-runtimes.d.ts",
+      "import": "./dist/managed-runtimes.js"
+    },
     "./manifest": {
       "types": "./dist/manifest.d.ts",
       "import": "./dist/manifest.js"
