@@ -75,6 +75,216 @@ export interface ProviderPolicy {
   escalateAlwaysTools?: string[];
 }
 
+// ── Engine modes (dual-mode runtimes: CLI vs app-managed SDK engine) ─────────
+
+/** Wire protocol a runtime SDK mode accepts for its model connection. */
+export type RuntimeModelProtocol = 'anthropic-messages' | 'openai-responses';
+
+/** How an engine mode obtains its model. */
+export type EngineModeConnection =
+  | { kind: 'external'; modelSelection: 'hidden' | 'optional' }
+  | { kind: 'llm-profile'; acceptedModelProtocols: RuntimeModelProtocol[] };
+
+/** Where the executable for an engine mode comes from. */
+export type EngineModeExecutable = 'external-cli' | 'bundled-sdk' | 'bundled-engine';
+
+/**
+ * One supported engine mode of a runtime. `connection` and `executable` are the
+ * canonical declarations; legacy UI fields (`model.kind`, `capabilities.providers`,
+ * `hasCliPath`) are derived from them by the host and must not be repeated here.
+ */
+export interface EngineModeDescriptor {
+  id: string;
+  label: string;
+  connection: EngineModeConnection;
+  executable: EngineModeExecutable;
+  /** Source-independent model options (everything except the derived `kind`). */
+  modelOptions: {
+    multimodalFallback: boolean;
+    thinkingLevel: ThinkingLevelMode;
+  };
+  /** tools/skills capabilities; `providers` is derived from `connection`. */
+  capabilities: {
+    tools: RuntimeCapabilityMode;
+    skills: RuntimeCapabilityMode;
+  };
+  authNote?: string;
+}
+
+/**
+ * Per-run engine execution identity passed from host to adapter. `engineMode`
+  * is the runtime's engine mode (e.g. 'cli' | 'sdk') — distinct from the
+ * permission `mode` also present on the run context.
+ */
+export interface EngineExecutionContext {
+  engineMode: string;
+  executableSource: 'explicit' | 'system' | 'managed-cli' | 'bundled-sdk' | 'bundled-engine';
+  /** Session-scoped configuration/state directory managed by the host (SDK modes). */
+  configDirectory?: string;
+}
+
+/**
+ * Explicit model connection resolved by the host from a bound LLM profile.
+ * The API key is for this run's in-memory use only; hosts must never persist
+ * or log it, and adapters must not forward it into traces or tool inputs.
+ */
+export type RuntimeModelConnection =
+  | {
+      protocol: 'anthropic-messages';
+      baseUrl: string;
+      apiKey: string;
+      requestHeaders?: Record<string, string>;
+    }
+  | {
+      protocol: 'openai-responses';
+      baseUrl: string;
+      apiKey: string;
+      requestHeaders?: Record<string, string>;
+    };
+
+/** Canonical runtime error codes shared between host and plugins. */
+export const RUNTIME_ERROR_CODES = [
+  'ENGINE_MODE_UNSUPPORTED',
+  'LLM_PROFILE_REQUIRED',
+  'LLM_PROFILE_NOT_FOUND',
+  'LLM_PROTOCOL_UNSUPPORTED',
+  'LLM_AUTH_UNSUPPORTED',
+  'LLM_PROFILE_FIELD_UNSUPPORTED',
+  'LLM_OPTION_UNSUPPORTED',
+  'FIELD_NOT_APPLICABLE',
+  'SDK_ENGINE_UNAVAILABLE',
+  'BUNDLED_ENGINE_UNAVAILABLE',
+  'RUNTIME_CONFIGURATION_CONFLICT',
+  'RUNTIME_PROTOCOL_UNSUPPORTED',
+  'RUNTIME_BINDING_KEY_UNAVAILABLE',
+  'SESSION_CONNECTION_CHANGED',
+  'SESSION_WORKSPACE_CHANGED',
+  'SESSION_RESUME_UNAVAILABLE',
+  'SESSION_RUNTIME_BUSY',
+  'RUNTIME_START_TIMEOUT',
+] as const;
+
+export type RuntimeErrorCode = (typeof RUNTIME_ERROR_CODES)[number];
+
+/** Structured error carrying one of the canonical runtime error codes. */
+export class RuntimeContractError extends Error {
+  readonly code: RuntimeErrorCode;
+  readonly details?: Record<string, string>;
+
+  constructor(code: RuntimeErrorCode, message: string, details?: Record<string, string>) {
+    super(message);
+    this.name = 'RuntimeContractError';
+    this.code = code;
+    this.details = details;
+  }
+}
+
+const ENGINE_MODE_EXECUTABLES: EngineModeExecutable[] = [
+  'external-cli',
+  'bundled-sdk',
+  'bundled-engine',
+];
+const ENGINE_MODE_MODEL_SELECTIONS = ['hidden', 'optional'] as const;
+const RUNTIME_CAPABILITY_MODES = ['profile', 'external', 'native-readonly', 'unsupported'];
+const THINKING_LEVEL_MODES = ['off', 'auto', 'selectable'];
+
+/**
+ * Structural validation for `engineModes` / `defaultEngineMode` declarations in
+ * a runtime contribution. Returns human-readable error strings; an empty array
+ * means the declaration is well-formed (or absent).
+ */
+export function validateEngineModeDeclarations(descriptor: unknown): string[] {
+  if (!isDescriptorRecord(descriptor)) return [];
+  const { engineModes, defaultEngineMode } = descriptor;
+  if (engineModes === undefined && defaultEngineMode === undefined) return [];
+  const errors: string[] = [];
+  if (!Array.isArray(engineModes) || engineModes.length === 0) {
+    return ['engineModes must be a non-empty array when declared'];
+  }
+  const seen = new Set<string>();
+  engineModes.forEach((mode, index) => {
+    const label = `engineModes[${index}]`;
+    if (!isRecord(mode)) {
+      errors.push(`${label} must be an object`);
+      return;
+    }
+    if (typeof mode.id !== 'string' || !mode.id.trim()) errors.push(`${label} missing "id"`);
+    else {
+      if (seen.has(mode.id)) errors.push(`${label} duplicates id "${mode.id}"`);
+      seen.add(mode.id);
+    }
+    if (typeof mode.label !== 'string' || !mode.label.trim()) {
+      errors.push(`${label} missing "label"`);
+    }
+    const connection = mode.connection as Record<string, unknown> | undefined;
+    if (!isRecord(connection)) {
+      errors.push(`${label} missing "connection"`);
+    } else if (connection.kind === 'external') {
+      if (!ENGINE_MODE_MODEL_SELECTIONS.includes(connection.modelSelection as never)) {
+        errors.push(`${label}.connection.modelSelection must be "hidden" or "optional"`);
+      }
+    } else if (connection.kind === 'llm-profile') {
+      if (
+        !Array.isArray(connection.acceptedModelProtocols) ||
+        connection.acceptedModelProtocols.length === 0 ||
+        !connection.acceptedModelProtocols.every(
+          protocol =>
+            typeof protocol === 'string' &&
+            ['anthropic-messages', 'openai-responses'].includes(protocol)
+        )
+      ) {
+        errors.push(
+          `${label}.connection.acceptedModelProtocols must be a non-empty array of supported protocols`
+        );
+      }
+    } else {
+      errors.push(`${label}.connection.kind must be "external" or "llm-profile"`);
+    }
+    if (!ENGINE_MODE_EXECUTABLES.includes(mode.executable as never)) {
+      errors.push(`${label}.executable must be one of ${ENGINE_MODE_EXECUTABLES.join('|')}`);
+    }
+    const modelOptions = mode.modelOptions as Record<string, unknown> | undefined;
+    if (
+      !isRecord(modelOptions) ||
+      typeof modelOptions.multimodalFallback !== 'boolean' ||
+      !THINKING_LEVEL_MODES.includes(modelOptions.thinkingLevel as never)
+    ) {
+      errors.push(`${label}.modelOptions must declare multimodalFallback and thinkingLevel`);
+    }
+    const capabilities = mode.capabilities as Record<string, unknown> | undefined;
+    if (
+      !isRecord(capabilities) ||
+      !RUNTIME_CAPABILITY_MODES.includes(capabilities.tools as never) ||
+      !RUNTIME_CAPABILITY_MODES.includes(capabilities.skills as never)
+    ) {
+      errors.push(`${label}.capabilities must declare tools and skills capability modes`);
+    }
+    for (const banned of ['model', 'hasCliPath', 'type']) {
+      if (banned in mode) {
+        errors.push(
+          `${label} must not declare "${banned}"; UI fields are derived from connection/executable`
+        );
+      }
+    }
+  });
+  if (defaultEngineMode !== undefined) {
+    if (typeof defaultEngineMode !== 'string' || !defaultEngineMode.trim()) {
+      errors.push('defaultEngineMode must be a non-empty string when declared');
+    } else if (!seen.has(defaultEngineMode)) {
+      errors.push(`defaultEngineMode "${defaultEngineMode}" is not declared in engineModes`);
+    }
+  }
+  return errors;
+}
+
+function isDescriptorRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return isDescriptorRecord(value);
+}
+
 /** Static, JSON-serializable runtime metadata declared in plugin.json. */
 export interface AgentRuntimeDescriptor {
   type: string;
@@ -91,6 +301,13 @@ export interface AgentRuntimeDescriptor {
     skills: RuntimeCapabilityMode;
   };
   authNote?: string;
+  /**
+   * Engine modes declared by the runtime. When present, the default mode's
+   * projection is the single source of truth for the legacy top-level fields
+   * above; runtimes without `engineModes` keep using the top-level fields.
+   */
+  defaultEngineMode?: string;
+  engineModes?: EngineModeDescriptor[];
   manifest: PCPProviderManifest;
   policy?: ProviderPolicy;
 }
@@ -208,6 +425,10 @@ export interface ExternalAgentRunContext {
   model?: string;
   cliPath?: string;
   abortController?: AbortController;
+  /** Engine-mode execution identity (absent on legacy hosts; SDK modes must fail without it). */
+  engineExecution?: EngineExecutionContext;
+  /** Explicit model connection for the selected engine mode's SDK mode. */
+  modelConnection?: RuntimeModelConnection;
 }
 
 export interface ExternalAgentRunState {

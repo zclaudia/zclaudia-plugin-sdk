@@ -1,3 +1,4 @@
+import { validateEngineModeDeclarations } from './providers.js';
 import type { AgentRuntimeContribution } from './providers.js';
 import type {
   SkillExecutionSelection,
@@ -277,6 +278,9 @@ export function validatePluginManifest(manifest: unknown): PluginValidationResul
           continue;
         }
         for (const field of fields) requireString(entry, field, label, errors);
+        if (key === 'agentRuntimes') {
+          errors.push(...validateEngineModeDeclarations(entry));
+        }
       }
     }
   }
