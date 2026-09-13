@@ -1,6 +1,6 @@
 {
   "name": "@zclaudia/plugin-sdk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Public contracts and development helpers for ZClaudia plugins.",
   "license": "MIT",
   "type": "module",
