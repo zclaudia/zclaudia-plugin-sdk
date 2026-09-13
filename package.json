@@ -21,6 +21,11 @@
       "types": "./dist/interactions.d.ts",
       "import": "./dist/interactions.js"
     },
+    "./invocations": {
+      "types": "./dist/invocations.d.ts",
+      "import": "./dist/invocations.js",
+      "default": "./dist/invocations.js"
+    },
     "./managed-runtimes": {
       "types": "./dist/managed-runtimes.d.ts",
       "import": "./dist/managed-runtimes.js"

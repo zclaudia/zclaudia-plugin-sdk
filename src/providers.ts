@@ -28,7 +28,13 @@ export type PCPCapabilityId =
   | 'permission.mode'
   | 'session.abort'
   | 'session.steer'
-  | 'session.background_task';
+  | 'session.background_task'
+  // URIP (unified runtime invocation protocol) — additive capabilities.
+  | 'invocation.catalog'
+  | 'invocation.execute'
+  | 'invocation.refresh'
+  | 'invocation.structured-input'
+  | 'skill.portable';
 
 export type CapabilityMode = 'native' | 'bridged' | 'emulated';
 export type ReliabilityTier = 'strict' | 'best_effort' | 'display_only';
@@ -325,6 +331,13 @@ export type ToolInteractionKind = 'todo_update';
 
 export interface SystemInfo {
   model?: string;
+  /**
+   * Provider-native model identifier that produced `model`, when the provider
+   * separates a parameterized wire id from a display name (e.g. Cursor ACP's
+   * `claude-opus-5[thinking=true,...]` vs `claude-opus-5`). Diagnostics only;
+   * UI should keep showing `model`.
+   */
+  modelId?: string;
   contextWindow?: number;
   contextWindowSource?: ContextWindowSource;
   contextWindowMatchedProvider?: string;
@@ -364,6 +377,13 @@ export interface ProviderRuntimeEvent {
   type: ProviderRuntimeEventType | LegacyProviderRuntimeEventType;
   retryInfo?: { attempt: number; maxAttempts: number; delayMs: number; status?: number };
   sessionId?: string;
+  /**
+   * Transport a provider session is bound to (e.g. `cursor-acp-v1` vs
+   * `cursor-stream-json-v1`). Emitted on `init` before the first prompt so the
+   * host can persist it atomically with the provider session id; resumes must
+   * honor the persisted binding instead of guessing.
+   */
+  providerTransport?: string;
   content?: string;
   systemInfo?: SystemInfo;
   toolUseId?: string;
@@ -415,6 +435,13 @@ export interface ProviderToolBridgeRequest {
 export interface ExternalAgentRunContext {
   cwd: string;
   sessionId?: string;
+  /**
+   * Persisted transport of the provider session being resumed (see
+   * `ProviderRuntimeEvent.providerTransport`). Null/undefined for new sessions
+   * or runtimes without transport binding. Resumes must honor it; the choice
+   * for unbound sessions belongs to the adapter's release policy.
+   */
+  providerTransport?: string | null;
   env?: Record<string, string>;
   mode?: string;
   systemPrompt?: string;
@@ -434,6 +461,47 @@ export interface ExternalAgentRunContext {
 export interface ExternalAgentRunState {
   providerSessionId?: string;
   providerCwd: string;
+}
+
+/**
+ * How an invocation executes. `host` is reserved for host actions; adapters use
+ * the remaining four (URIP design doc §8.1).
+ */
+export type InvocationExecutionMode =
+  | 'host'
+  | 'native-text'
+  | 'native-structured'
+  | 'bridged'
+  | 'emulated';
+
+/**
+ * Compatibility adapter surface during the URIP migration (design doc §9.2):
+ * `run(string)` keeps existing adapters working, `startTurn` opts into typed
+ * turn input, and `invocations` publishes a runtime catalog. Hosts require at
+ * least one of `run`/`startTurn`.
+ */
+export interface ExternalAgentAdapterCompat extends Omit<ExternalAgentAdapter, 'run'> {
+  run?(
+    input: string,
+    context: ExternalAgentRunContext,
+    onPermission: PermissionCallback
+  ): AsyncGenerator<ProviderRuntimeEvent, void, void>;
+  startTurn?(
+    input: unknown,
+    context: ExternalAgentRunContext,
+    onPermission: PermissionCallback
+  ): AsyncGenerator<ProviderRuntimeEvent, void, void>;
+  invocations?: unknown;
+}
+
+/** True when an adapter object implements the minimum runnable surface. */
+export function adapterIsRunnable(adapter: unknown): boolean {
+  return (
+    typeof adapter === 'object' &&
+    adapter !== null &&
+    (('run' in adapter && typeof (adapter as { run?: unknown }).run === 'function') ||
+      ('startTurn' in adapter && typeof (adapter as { startTurn?: unknown }).startTurn === 'function'))
+  );
 }
 
 export interface ExternalAgentAdapter {
