@@ -15,11 +15,34 @@ export type ToolEffect =
 /** Provider-declared meaning of a tool call, independent of provider-specific names. */
 export type ToolSemantic = 'plan_proposal' | 'plan_enter' | 'plan_exit';
 
+/**
+ * Which layer supplied the effective context window reported in
+ * {@link SystemInfo.contextWindow}. The host surfaces this as provenance
+ * ("from your LLM profile" vs "fallback estimate") and warns on `fallback`.
+ *
+ * - `profile_entry`         — the user's declared per-model context window on
+ *                             their LLM profile.
+ * - `pi_ai_registry`        — the host's model registry. The matched provider
+ *                             id is reported in
+ *                             {@link SystemInfo.contextWindowMatchedProvider}.
+ * - `openai_compat_default` — the standard openai-compat 128k assumption, used
+ *                             when no registry entry matched. Distinct from
+ *                             `fallback` so the host can say "we assumed the
+ *                             usual window" without claiming a registry hit.
+ * - `fallback`              — last-resort safety net; means "we don't actually
+ *                             know", so the host shows a warning.
+ * - `runtime`               — the window the agent runtime reported about
+ *                             itself (e.g. the Claude Agent SDK's per-model
+ *                             `contextWindow`, or Cursor's `context=300k`
+ *                             modelId parameter). This is the value a plugin
+ *                             emits; the other four are resolved host-side.
+ */
 export type ContextWindowSource =
   | 'profile_entry'
   | 'pi_ai_registry'
   | 'openai_compat_default'
-  | 'fallback';
+  | 'fallback'
+  | 'runtime';
 
 export interface ProviderUsageCost {
   input: number;
