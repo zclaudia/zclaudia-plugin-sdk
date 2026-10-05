@@ -99,6 +99,19 @@ export interface CodexTokenUsageCounters {
   reasoningOutputTokens: number;
 }
 
+/**
+ * Trusted cumulative usage checkpoint the host hands a runtime when it resumes
+ * a native thread (read from the host usage ledger before dispatch). The
+ * runtime must prove same-thread identity (its own thread id vs
+ * `nativeThreadId`) before trusting the counters.
+ */
+export interface RuntimeUsageBaseline {
+  /** Cumulative native counters recorded at the last checkpoint. */
+  cumulative: CodexTokenUsageCounters;
+  /** Native thread/session id the counters belong to. */
+  nativeThreadId?: string;
+}
+
 /** Plugin → host cumulative usage event. */
 export interface ProviderUsageUpdatedEvent {
   type: 'provider_usage_updated';

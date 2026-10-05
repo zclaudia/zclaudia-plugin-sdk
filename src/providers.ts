@@ -351,7 +351,11 @@ export interface SystemInfo {
   agents?: string[];
 }
 
-export type { ProviderUsageUpdatedEvent, RuntimeUsageSnapshot } from './usage.js';
+export type {
+  ProviderUsageUpdatedEvent,
+  RuntimeUsageBaseline,
+  RuntimeUsageSnapshot,
+} from './usage.js';
 
 export const PROVIDER_RUNTIME_EVENT_TYPES = [
   'init',
@@ -461,6 +465,13 @@ export interface ExternalAgentRunContext {
   engineExecution?: EngineExecutionContext;
   /** Explicit model connection for the selected engine mode's SDK mode. */
   modelConnection?: RuntimeModelConnection;
+  /**
+   * Trusted usage checkpoint for a resumed native thread. `null` means the
+   * host looked and found none; `undefined` means the host does not supply
+   * baselines. Either way the runtime must treat the baseline as unknown,
+   * never as zero.
+   */
+  usageBaseline?: import('./usage.js').RuntimeUsageBaseline | null;
 }
 
 export interface ExternalAgentRunState {
