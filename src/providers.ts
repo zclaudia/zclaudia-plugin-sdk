@@ -119,7 +119,7 @@ export interface EngineModeDescriptor {
 
 /**
  * Per-run engine execution identity passed from host to adapter. `engineMode`
-  * is the runtime's engine mode (e.g. 'cli' | 'sdk') — distinct from the
+ * is the runtime's engine mode (e.g. 'cli' | 'sdk') — distinct from the
  * permission `mode` also present on the run context.
  */
 export interface EngineExecutionContext {
@@ -351,6 +351,8 @@ export interface SystemInfo {
   agents?: string[];
 }
 
+export type { ProviderUsageUpdatedEvent, RuntimeUsageSnapshot } from './usage.js';
+
 export const PROVIDER_RUNTIME_EVENT_TYPES = [
   'init',
   'assistant_delta',
@@ -363,6 +365,7 @@ export const PROVIDER_RUNTIME_EVENT_TYPES = [
   'mode_transition',
   'thinking_delta',
   'retry_scheduled',
+  'provider_usage_updated',
 ] as const;
 
 export type ProviderRuntimeEventType = (typeof PROVIDER_RUNTIME_EVENT_TYPES)[number];
@@ -375,6 +378,8 @@ export type LegacyProviderRuntimeEventType =
 
 export interface ProviderRuntimeEvent {
   type: ProviderRuntimeEventType | LegacyProviderRuntimeEventType;
+  /** Invocation usage snapshot, supplied with provider_usage_updated. */
+  snapshot?: import('./usage.js').RuntimeUsageSnapshot;
   retryInfo?: { attempt: number; maxAttempts: number; delayMs: number; status?: number };
   sessionId?: string;
   /**
@@ -500,7 +505,8 @@ export function adapterIsRunnable(adapter: unknown): boolean {
     typeof adapter === 'object' &&
     adapter !== null &&
     (('run' in adapter && typeof (adapter as { run?: unknown }).run === 'function') ||
-      ('startTurn' in adapter && typeof (adapter as { startTurn?: unknown }).startTurn === 'function'))
+      ('startTurn' in adapter &&
+        typeof (adapter as { startTurn?: unknown }).startTurn === 'function'))
   );
 }
 

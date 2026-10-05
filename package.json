@@ -45,6 +45,10 @@
     "./types": {
       "types": "./dist/types.d.ts",
       "import": "./dist/types.js"
+    },
+    "./usage": {
+      "types": "./dist/usage.d.ts",
+      "import": "./dist/usage.js"
     }
   },
   "scripts": {
