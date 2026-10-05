@@ -396,6 +396,14 @@ export interface ProviderRuntimeEvent {
   content?: string;
   systemInfo?: SystemInfo;
   toolUseId?: string;
+  /**
+   * Sub-agent lineage: set on a tool_use/tool_result event that happened
+   * inside a sub-agent, carrying the tool_use_id of the parent Task call
+   * that spawned it (the runtime's `parent_tool_use_id`). Only nested-agent
+   * runtimes (e.g. claude) emit this; hosts use it to attribute inner steps
+   * to their agent instead of flattening them into the main transcript.
+   */
+  parentToolUseId?: string;
   toolName?: string;
   toolInput?: unknown;
   toolEffect?: ToolEffect;
